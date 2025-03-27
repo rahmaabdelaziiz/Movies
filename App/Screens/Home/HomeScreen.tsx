@@ -201,7 +201,6 @@ const HomeScreen = ({navigation}) => {
           <TouchableOpacity
             style={styles.loadMoreButton}
             onPress={loadMoreMovies}>
-            {/* <Text style={styles.loadMoreText}>Voir plus de films</Text> */}
           </TouchableOpacity>
         )}
       </View>
@@ -212,9 +211,7 @@ const HomeScreen = ({navigation}) => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.appTitle}>MOVIES</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Search')}>
-          <Ionicons name="search" size={25} color="#FFF" />
-        </TouchableOpacity>
+        <Image source={require('../../Assets/Logo.png')} style={styles.logo} />
       </View>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
@@ -342,6 +339,13 @@ const HomeScreen = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
+    logo: {
+        width: 40,
+        height: 40,
+        marginRight: 15,
+        tintColor: '#d7201b',
+      },
+    
   container: {
     flex: 1,
     backgroundColor: '#121212',
@@ -354,10 +358,10 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#d7201b',
+    borderBottomColor: '#fff',
   },
   appTitle: {
-    color: '#FFF',
+    color: '#d7201b',
     fontSize: 24,
     fontWeight: 'bold',
     letterSpacing: 2,
