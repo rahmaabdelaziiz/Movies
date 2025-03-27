@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
+  TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 
 const API_KEY = '81b1cc283e1661e43da248d7d09aecb6';
@@ -24,6 +27,41 @@ const HomeScreen = ({navigation}) => {
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [error, setError] = useState(null);
+
+  const handleError = error => {
+    console.error('Erreur:', error);
+    setError(error.message);
+    Alert.alert(
+      'Erreur',
+      error.message ||
+        'Impossible de charger les films. Veuillez réessayer plus tard.',
+    );
+  };
+
+  {
+    error && <Text style={styles.errorText}>{error}</Text>;
+  }
+  const openModal = movie => {
+    setSelectedMovie(movie);
+    setIsModalVisible(true);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeModal = () => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => setIsModalVisible(false));
+  };
 
   const fetchMovies = useCallback(async (type, page = 1) => {
     try {
@@ -90,14 +128,6 @@ const HomeScreen = ({navigation}) => {
     fetchAllMovies();
   }, [fetchAllMovies]);
 
-  const handleError = error => {
-    console.error('Erreur:', error);
-    Alert.alert(
-      'Erreur',
-      'Impossible de charger les films. Veuillez réessayer plus tard.',
-    );
-  };
-
   const onRefresh = () => {
     setRefreshing(true);
     fetchAllMovies();
@@ -107,7 +137,10 @@ const HomeScreen = ({navigation}) => {
     ({item}) => (
       <TouchableOpacity
         style={styles.movieContainer}
-        onPress={() => navigation.navigate('Details', {movieId: item.id})}>
+        onPress={() => {
+          setSelectedMovie(item);
+          setIsModalVisible(true);
+        }}>
         <Image
           source={{
             uri: item.poster_path
@@ -125,14 +158,14 @@ const HomeScreen = ({navigation}) => {
         </Text>
       </TouchableOpacity>
     ),
-    [navigation],
+    [],
   );
 
   const renderTopMovieItem = useCallback(
     ({item}) => (
       <TouchableOpacity
         style={styles.topMovieContainer}
-        onPress={() => navigation.navigate('Details', {movieId: item.id})}
+        onPress={() => openModal(item)}
         activeOpacity={0.7}>
         <View style={styles.topMovieImageContainer}>
           <Image
@@ -226,11 +259,131 @@ const HomeScreen = ({navigation}) => {
           onEndReachedThreshold={0.2}
         />
       )}
+      <Modal
+        visible={isModalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeModal}>
+        <TouchableWithoutFeedback onPress={closeModal}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              styles.modalBackdrop,
+              {
+                transform: [
+                  {
+                    translateY: fadeAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [50, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}>
+            <Image
+              source={{
+                uri: selectedMovie?.poster_path
+                  ? `https://image.tmdb.org/t/p/w500${selectedMovie.poster_path}`
+                  : 'https://via.placeholder.com/300x450?text=No+Image',
+              }}
+              style={styles.modalImage}
+            />
+            <Text style={styles.modalTitle}>{selectedMovie?.title}</Text>
+            <View style={styles.movieDetails}>
+              <Text style={styles.detailText}>
+                ⭐ {selectedMovie?.vote_average?.toFixed(1)}/10
+              </Text>
+              <Text style={styles.detailText}>
+                📅 {selectedMovie?.release_date?.split('-')[0]}
+              </Text>
+            </View>
+            // In your modal rendering part, replace the overview section with:
+            <Text
+              style={[
+                styles.modalOverview,
+                !selectedMovie?.overview && styles.noOverview,
+              ]}>
+              {selectedMovie?.overview || 'Aucune description disponible'}
+            </Text>
+            <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+              <Text style={styles.closeButtonText}>×</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  errorText: {
+    color: '#d7201b',
+    textAlign: 'center',
+    margin: 10,
+  },
+  modalImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  movieDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+    gap: 200,
+  },
+  detailText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  modalOverview: {
+    color: '#ddd',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  noOverview: {
+    textAlign: 'center',
+    fontStyle: 'italic',
+    color: '#888',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 15,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  modalTitle: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#d7201b',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontSize: 20,
+    lineHeight: 28,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -260,7 +413,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     marginRight: 15,
-    tintColor: '#FFF',
+    tintColor: '#d7201b',
   },
   appTitle: {
     color: '#FFF',
