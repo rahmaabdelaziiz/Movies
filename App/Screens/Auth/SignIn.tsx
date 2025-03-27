@@ -9,21 +9,68 @@ import {
   Image,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import {getAuth, signInWithEmailAndPassword} from 'firebase/auth';
+import {app} from './FirebaseConfig';
 
 const SignInScreen = () => {
-  const [nomdutilisateur, setNomdutilisateur] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
+  const auth = getAuth(app);
+
   const handleLogin = async () => {
-    if (nomdutilisateur === 'test.com' && password === '123456') {
-      await AsyncStorage.setItem('userToken', 'dummy_token');
-      navigation.replace('HomeNavigation');
-    } else {
-      Alert.alert("Nom d'utilisateur ou mot de passe incorrect");
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+
+      if (userCredential?.user) {
+        await AsyncStorage.setItem('userToken', userCredential.user.uid);
+        navigation.replace('HomeNavigation');
+      }
+    } catch (error: any) {
+      console.log('Erreur complète:', error);
+
+      let errorMessage = "Une erreur s'est produite lors de la connexion";
+
+      if (error.code) {
+        switch (error.code) {
+          case 'auth/invalid-credential':
+          case 'auth/wrong-password':
+            errorMessage = 'Email ou mot de passe incorrect';
+            break;
+          case 'auth/user-not-found':
+            errorMessage = 'Aucun compte trouvé avec cet email';
+            break;
+          case 'auth/user-disabled':
+            errorMessage = 'Ce compte a été désactivé';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = 'Trop de tentatives. Réessayez plus tard';
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
+        }
+      }
+
+      Alert.alert('Erreur', errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
+
   return (
     <LinearGradient colors={['#d7201b', '#000000']} style={styles.background}>
       <View style={styles.container}>
@@ -36,8 +83,10 @@ const SignInScreen = () => {
             style={styles.input}
             placeholder="Adresse e-mail"
             placeholderTextColor="#B0B0B0"
-            value={nomdutilisateur}
-            onChangeText={setNomdutilisateur}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
           />
 
           <TextInput
@@ -49,14 +98,21 @@ const SignInScreen = () => {
             onChangeText={setPassword}
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Se connecter</Text>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleLogin}
+            disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Se connecter</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
             <Text style={styles.signupText}>
-              Vous n'avez pas un compte ?{''}
-              <Text style={styles.signupLink}> Inscrivez-vous</Text>
+              Vous n'avez pas de compte ?{' '}
+              <Text style={styles.signupLink}>Inscrivez-vous</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -102,6 +158,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     fontSize: 16,
     marginBottom: 10,
+    color: '#555',
   },
   forgotPassword: {
     fontSize: 14,

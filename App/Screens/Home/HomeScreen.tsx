@@ -12,7 +12,9 @@ import {
   Modal,
   TouchableWithoutFeedback,
   Animated,
+  Linking,
 } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const API_KEY = '81b1cc283e1661e43da248d7d09aecb6';
 const BASE_URL = 'https://api.themoviedb.org/3';
@@ -25,7 +27,6 @@ const HomeScreen = ({navigation}) => {
   const [refreshing, setRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -42,9 +43,6 @@ const HomeScreen = ({navigation}) => {
     );
   };
 
-  {
-    error && <Text style={styles.errorText}>{error}</Text>;
-  }
   const openModal = movie => {
     setSelectedMovie(movie);
     setIsModalVisible(true);
@@ -69,9 +67,7 @@ const HomeScreen = ({navigation}) => {
         `${BASE_URL}/movie/${type}?api_key=${API_KEY}&language=fr-FR&page=${page}`,
       );
 
-      if (!response.ok)
-        throw new Error(`Erreur HTTP! statut: ${response.status}`);
-
+      if (!response.ok) throw new Error(`Erreur HTTP! statut: ${response.status}`);
       const data = await response.json();
       if (!data.results) throw new Error('Format de données inattendu');
 
@@ -124,6 +120,7 @@ const HomeScreen = ({navigation}) => {
       setIsLoadingMore(false);
     }
   }, [currentPage, totalPages, isLoadingMore, fetchMovies]);
+
   useEffect(() => {
     fetchAllMovies();
   }, [fetchAllMovies]);
@@ -137,10 +134,10 @@ const HomeScreen = ({navigation}) => {
     ({item}) => (
       <TouchableOpacity
         style={styles.movieContainer}
-        onPress={() => {
-          setSelectedMovie(item);
-          setIsModalVisible(true);
-        }}>
+        onPress={() => navigation.navigate('Detail', {
+          itemId: item.id,
+          mediaType: 'movie'
+        })}>
         <Image
           source={{
             uri: item.poster_path
@@ -158,14 +155,17 @@ const HomeScreen = ({navigation}) => {
         </Text>
       </TouchableOpacity>
     ),
-    [],
+    [navigation],
   );
 
   const renderTopMovieItem = useCallback(
     ({item}) => (
       <TouchableOpacity
         style={styles.topMovieContainer}
-        onPress={() => openModal(item)}
+        onPress={() => navigation.navigate('Detail', {
+          itemId: item.id,
+          mediaType: 'movie'
+        })}
         activeOpacity={0.7}>
         <View style={styles.topMovieImageContainer}>
           <Image
@@ -195,25 +195,29 @@ const HomeScreen = ({navigation}) => {
 
     return (
       <View style={styles.footerContainer}>
-        {loadingMore ? (
-          <ActivityIndicator size="small" color="#d7201b" />
+        {isLoadingMore ? (
+          <ActivityIndicator size="large" color="#d7201b" />
         ) : (
           <TouchableOpacity
             style={styles.loadMoreButton}
             onPress={loadMoreMovies}>
-            <Text style={styles.loadMoreText}>Voir plus de films</Text>
+            {/* <Text style={styles.loadMoreText}>Voir plus de films</Text> */}
           </TouchableOpacity>
         )}
       </View>
     );
-  }, [currentPage, totalPages, loadingMore, loadMoreMovies]);
+  }, [currentPage, totalPages, isLoadingMore, loadMoreMovies]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.appTitle}>MOVIES</Text>
-        <Image source={require('../../Assets/Logo.png')} style={styles.logo} />
+        <TouchableOpacity onPress={() => navigation.navigate('Search')}>
+          <Ionicons name="search" size={25} color="#FFF" />
+        </TouchableOpacity>
       </View>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
 
       {loading && !refreshing ? (
         <ActivityIndicator size="large" color="#d7201b" style={styles.loader} />
@@ -245,20 +249,13 @@ const HomeScreen = ({navigation}) => {
               tintColor="#d7201b"
             />
           }
-          ListFooterComponent={
-            isLoadingMore ? (
-              <ActivityIndicator
-                size="large"
-                color="#d7201b"
-                style={styles.loadingMoreIndicator}
-              />
-            ) : null
-          }
+          ListFooterComponent={ListFooterComponent()}
           contentContainerStyle={styles.listContainer}
           onEndReached={loadMoreMovies}
           onEndReachedThreshold={0.2}
         />
       )}
+
       <Modal
         visible={isModalVisible}
         transparent
@@ -289,6 +286,7 @@ const HomeScreen = ({navigation}) => {
               style={styles.modalImage}
             />
             <Text style={styles.modalTitle}>{selectedMovie?.title}</Text>
+
             <View style={styles.movieDetails}>
               <Text style={styles.detailText}>
                 ⭐ {selectedMovie?.vote_average?.toFixed(1)}/10
@@ -297,14 +295,42 @@ const HomeScreen = ({navigation}) => {
                 📅 {selectedMovie?.release_date?.split('-')[0]}
               </Text>
             </View>
-            // In your modal rendering part, replace the overview section with:
-            <Text
-              style={[
-                styles.modalOverview,
-                !selectedMovie?.overview && styles.noOverview,
-              ]}>
-              {selectedMovie?.overview || 'Aucune description disponible'}
-            </Text>
+
+            <View style={styles.synopsisContainer}>
+              <Text style={styles.sectionTitleModal}>Synopsis</Text>
+              {selectedMovie?.overview ? (
+                <Text style={styles.modalOverview}>
+                  {selectedMovie.overview}
+                </Text>
+              ) : (
+                <View style={styles.noOverviewContainer}>
+                  <Ionicons name="document-text-outline" size={30} color="#888" />
+                  <Text style={styles.noOverviewText}>
+                    Synopsis non disponible
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.trailerSection}>
+              <Text style={styles.sectionTitleModal}>Bande-annonce</Text>
+              <View style={styles.trailerPlaceholder}>
+                <Ionicons name="videocam-off" size={40} color="#888" />
+                <Text style={styles.noTrailerText}>
+                  Bande-annonce non disponible
+                </Text>
+                <Text style={styles.trailerHelpText}>
+                  Revenez plus tard ou consultez TMDB
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.tmdbButton}
+              onPress={() => Linking.openURL(`https://www.themoviedb.org/movie/${selectedMovie?.id}`)}>
+              <Text style={styles.tmdbButtonText}>Voir sur TMDB</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
@@ -316,110 +342,30 @@ const HomeScreen = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
-  errorText: {
-    color: '#d7201b',
-    textAlign: 'center',
-    margin: 10,
-  },
-  modalImage: {
-    width: '100%',
-    height: 300,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
-  movieDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-    gap: 200,
-  },
-  detailText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  modalOverview: {
-    color: '#ddd',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  noOverview: {
-    textAlign: 'center',
-    fontStyle: 'italic',
-    color: '#888',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '100%',
-    maxHeight: '80%',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 15,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  modalTitle: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#d7201b',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 20,
-    lineHeight: 28,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginVertical: 10,
-    marginHorizontal: 5,
-  },
-
   container: {
     flex: 1,
     backgroundColor: '#121212',
-  },
-  loadingMoreIndicator: {
-    marginVertical: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#1a1a1a',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#d7201b',
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    marginRight: 15,
-    tintColor: '#d7201b',
   },
   appTitle: {
     color: '#FFF',
     fontSize: 24,
     fontWeight: 'bold',
     letterSpacing: 2,
+  },
+  errorText: {
+    color: '#d7201b',
+    textAlign: 'center',
+    margin: 10,
   },
   loader: {
     flex: 1,
@@ -428,6 +374,13 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     padding: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginVertical: 10,
+    marginHorizontal: 5,
   },
   topMoviesList: {
     paddingLeft: 15,
@@ -505,7 +458,7 @@ const styles = StyleSheet.create({
   },
   loadMoreButton: {
     padding: 15,
-    backgroundColor: '#d7201b',
+    // backgroundColor: '#d7201b',
     borderRadius: 8,
     alignItems: 'center',
     margin: 10,
@@ -519,6 +472,119 @@ const styles = StyleSheet.create({
   footerContainer: {
     alignItems: 'center',
     paddingVertical: 10,
+  },
+  modalContent: {
+    width: '100%',
+    maxHeight: '90%',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 15,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  modalTitle: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  movieDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
+  },
+  detailText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  synopsisContainer: {
+    marginBottom: 20,
+  },
+  sectionTitleModal: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalOverview: {
+    color: '#ddd',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  noOverviewContainer: {
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+  },
+  noOverviewText: {
+    color: '#888',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  trailerSection: {
+    marginBottom: 20,
+  },
+  trailerPlaceholder: {
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 20,
+  },
+  noTrailerText: {
+    color: '#888',
+    marginTop: 10,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  trailerHelpText: {
+    color: '#555',
+    marginTop: 5,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  tmdbButton: {
+    backgroundColor: '#01b4e4',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  tmdbButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#d7201b',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontSize: 20,
+    lineHeight: 28,
   },
 });
 
