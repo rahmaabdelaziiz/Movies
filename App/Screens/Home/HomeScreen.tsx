@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useRef} from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,44 +15,44 @@ import {
   Linking,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchPopularMovies, fetchTopRatedMovies, incrementPage } from '../../Redux/moviesSlice';
 
-const API_KEY = '81b1cc283e1661e43da248d7d09aecb6';
-const BASE_URL = 'https://api.themoviedb.org/3';
 const MOVIES_PER_PAGE = 10;
 
-const HomeScreen = ({navigation}) => {
-  const [popularMovies, setPopularMovies] = useState([]);
-  const [topRatedMovies, setTopRatedMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
+const HomeScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const {
+    popular,
+    topRated,
+    currentPage,
+    totalPages,
+    loading,
+    error,
+  } = useSelector((state) => state.movies);
+  
   const [refreshing, setRefreshing] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const [error, setError] = useState(null);
+  const isLoadingMore = useSelector((state) => state.movies.loading && currentPage > 1);
+  useEffect(() => {
+    dispatch(fetchPopularMovies(1));
+    dispatch(fetchTopRatedMovies());
+  }, [dispatch]);
 
-  const handleError = error => {
-    console.error('Erreur:', error);
-    setError(error.message);
-    Alert.alert(
-      'Erreur',
-      error.message ||
-        'Impossible de charger les films. Veuillez réessayer plus tard.',
-    );
+  const onRefresh = () => {
+    setRefreshing(true);
+    dispatch(fetchPopularMovies(1))
+      .finally(() => setRefreshing(false));
+    dispatch(fetchTopRatedMovies());
   };
 
-  const openModal = movie => {
-    setSelectedMovie(movie);
-    setIsModalVisible(true);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+  const loadMoreMovies = () => {
+    if (currentPage >= totalPages) return;
+    dispatch(incrementPage());
+    dispatch(fetchPopularMovies(currentPage + 1));
   };
-
   const closeModal = () => {
     Animated.timing(fadeAnim, {
       toValue: 0,
@@ -60,76 +60,6 @@ const HomeScreen = ({navigation}) => {
       useNativeDriver: true,
     }).start(() => setIsModalVisible(false));
   };
-
-  const fetchMovies = useCallback(async (type, page = 1) => {
-    try {
-      const response = await fetch(
-        `${BASE_URL}/movie/${type}?api_key=${API_KEY}&language=fr-FR&page=${page}`,
-      );
-
-      if (!response.ok) throw new Error(`Erreur HTTP! statut: ${response.status}`);
-      const data = await response.json();
-      if (!data.results) throw new Error('Format de données inattendu');
-
-      return {
-        results: data.results,
-        totalPages: data.total_pages,
-      };
-    } catch (error) {
-      console.error(`Erreur lors de la récupération des films ${type}:`, error);
-      throw error;
-    }
-  }, []);
-
-  const fetchAllMovies = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [popular, topRated] = await Promise.all([
-        fetchMovies('popular'),
-        fetchMovies('top_rated'),
-      ]);
-
-      setPopularMovies(popular.results.slice(0, MOVIES_PER_PAGE));
-      setTopRatedMovies(topRated.results);
-      setTotalPages(popular.totalPages);
-      setCurrentPage(1);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [fetchMovies]);
-
-  const loadMoreMovies = useCallback(async () => {
-    if (isLoadingMore || currentPage >= totalPages) return;
-
-    try {
-      setIsLoadingMore(true);
-      const nextPage = currentPage + 1;
-      const response = await fetchMovies('popular', nextPage);
-
-      setPopularMovies(prev => [
-        ...prev,
-        ...response.results.slice(0, MOVIES_PER_PAGE),
-      ]);
-      setCurrentPage(nextPage);
-    } catch (error) {
-      console.error('Erreur lors du chargement supplémentaire:', error);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [currentPage, totalPages, isLoadingMore, fetchMovies]);
-
-  useEffect(() => {
-    fetchAllMovies();
-  }, [fetchAllMovies]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAllMovies();
-  };
-
   const renderMovieItem = useCallback(
     ({item}) => (
       <TouchableOpacity
@@ -224,7 +154,7 @@ const HomeScreen = ({navigation}) => {
             <>
               <Text style={styles.sectionTitle}>⭐ Top 5 des Films</Text>
               <FlatList
-                data={topRatedMovies.slice(0, 5)}
+                data={topRated.slice(0, 5)}
                 renderItem={renderTopMovieItem}
                 keyExtractor={item => item.id.toString()}
                 horizontal
@@ -234,7 +164,7 @@ const HomeScreen = ({navigation}) => {
               <Text style={styles.sectionTitle}>🔥 Films Populaires</Text>
             </>
           }
-          data={popularMovies}
+          data={popular.slice(0, currentPage * MOVIES_PER_PAGE)}
           renderItem={renderMovieItem}
           keyExtractor={item => item.id.toString()}
           numColumns={2}
@@ -246,10 +176,16 @@ const HomeScreen = ({navigation}) => {
               tintColor="#d7201b"
             />
           }
-          ListFooterComponent={ListFooterComponent()}
-          contentContainerStyle={styles.listContainer}
           onEndReached={loadMoreMovies}
           onEndReachedThreshold={0.2}
+          ListFooterComponent={
+            currentPage < totalPages ? (
+              <View style={styles.footerContainer}>
+                <ActivityIndicator size="large" color="#d7201b" />
+              </View>
+            ) : null
+          }
+          contentContainerStyle={styles.listContainer}
         />
       )}
 
